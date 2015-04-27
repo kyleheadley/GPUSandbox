@@ -13,8 +13,8 @@
 
 		<!-- consts -->
 		<script>
-			var WIDTH = 2048;
-			var OMINOES = 100000;
+			var WIDTH = 512;
+			var OMINOES = 1000;
 		</script>
 
 		<!-- pass through vertex shader -->
@@ -142,8 +142,8 @@
 			}
 			function getRenderTarget() {
 				var renderTarget = new THREE.WebGLRenderTarget(WIDTH, WIDTH, {
-					wrapS: THREE.RepeatWrapping,
-					wrapT: THREE.RepeatWrapping,
+					//wrapS: THREE.RepeatWrapping,
+					//wrapT: THREE.RepeatWrapping,
 					minFilter: THREE.NearestFilter,
 					magFilter: THREE.NearestFilter,
 					format: THREE.RGBAFormat,
@@ -157,24 +157,23 @@
 
 		<!-- main -->
 		<script>
-			var scene = new THREE.Scene();
-			var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+			//var scene = new THREE.Scene();
+			//var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
 
 			var renderer = new THREE.WebGLRenderer();
-			renderer.setSize( window.innerWidth, window.innerHeight );
+			renderer.setSize( WIDTH, WIDTH);//window.innerWidth, window.innerHeight );
 			document.body.appendChild( renderer.domElement );
-			camera.position.z = 8;
-			var controls = new THREE.TrackballControls(camera, renderer.domElement)
+			//camera.position.z = 8;
 
-			var bgGeo = new THREE.PlaneBufferGeometry(2000,2000);
-			var bgMat = new THREE.MeshBasicMaterial({color: 0x000044})
-			var bgMesh = new THREE.Mesh(bgGeo, bgMat);
-			scene.add(bgMesh);
-			bgMesh.position.z -= 10;
-			var sphereGeo = new THREE.SphereGeometry(6,50,50);
-			var redMat = new THREE.MeshBasicMaterial({color: 0xff0000})
-			var sphereMesh = new THREE.Mesh(sphereGeo, redMat);
-			scene.add(sphereMesh);
+			//var bgGeo = new THREE.PlaneBufferGeometry(2000,2000);
+			//var bgMat = new THREE.MeshBasicMaterial({color: 0x000044})
+			//var bgMesh = new THREE.Mesh(bgGeo, bgMat);
+			//scene.add(bgMesh);
+			//bgMesh.position.z -= 10;
+			// var sphereGeo = new THREE.SphereGeometry(6,50,50);
+			// var redMat = new THREE.MeshBasicMaterial({color: 0xff0000})
+			// var sphereMesh = new THREE.Mesh(sphereGeo, redMat);
+			// scene.add(sphereMesh);
 
 
 
@@ -200,30 +199,38 @@
 			var texScene = new THREE.Scene();
 			var texMesh = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2 ), passThruShader );
 			texScene.add(texMesh);
+
 			var tex1 = getRenderTarget();
 			var tex2 = getRenderTarget();
+
 			// Takes a texture, and render out as another texture
 			var renderTexture = function ( input, output ) {
 				texMesh.material = passThruShader;
 				passThruShader.uniforms.texture.value = input;
 				renderer.render( texScene, texCam, output );
 			}
-			var renderTick = function(input, output) {
-				texMesh.material = golShader;
-				golShader.uniforms.texture.value = input;
+			var renderTick = function(input, shader, output) {
+				texMesh.material = shader;
+				shader.uniforms.texture.value = input;
 				renderer.render( texScene, texCam, output );
+			}
+			var renderFinal = function(input, shader) {
+				texMesh.material = shader;
+				shader.uniforms.texture.value = input;
+				renderer.render( texScene, texCam );
 			}
 			var flipflop = true;
 			var flip = function() {
 				if (flipflop) {
-					renderTick( tex1, tex2 );
-					sphereMesh.material.map = tex2;
+					renderTick( tex1, golShader, tex2 );
+					//sphereMesh.material.map = tex2;
 				} else {
-					renderTick( tex2, tex1 );
-					sphereMesh.material.map = tex1;
+					renderTick( tex2, golShader, tex1 );
+					//sphereMesh.material.map = tex1;
 				}
 				flipflop = !flipflop;
 			}
+			//initialize data
 			var a = new Float32Array( WIDTH * WIDTH * 4 );
 			for(var i = 0; i < WIDTH * WIDTH * 4; i+=4) a[i+2] = 0.7;
 			//f-omino
@@ -258,10 +265,10 @@
 
 
 
-			sphereMesh.material = new THREE.MeshBasicMaterial({map: tex1});
+			//sphereMesh.material = new THREE.MeshBasicMaterial({map: tex1});
 
 
-			window.addEventListener( 'resize', onWindowResize, false );
+			//window.addEventListener( 'resize', onWindowResize, false );
 			//window.addEventListener( 'mousedown', flip, false );
 			document.addEventListener("keydown", onKeyDown, false);
 			document.addEventListener("keyup",   onKeyUp,   false);
@@ -279,8 +286,8 @@
 				windowHalfX = window.innerWidth / 2;
 				windowHalfY = window.innerHeight / 2;
 
-				camera.aspect = window.innerWidth / window.innerHeight;
-				camera.updateProjectionMatrix();
+				//camera.aspect = window.innerWidth / window.innerHeight;
+				//camera.updateProjectionMatrix();
 
 				renderer.setSize( window.innerWidth, window.innerHeight );
 
@@ -292,9 +299,12 @@
 			var render = function () {
 				requestAnimationFrame( render );
 				if(repeat) flip();
-				renderer.render(scene, camera);
-
-				controls.update();
+				//renderer.render(scene, camera);
+				if (flipflop) {
+					renderFinal(tex2, passThruShader);
+				} else {
+					renderFinal(tex1, passThruShader);
+				}
 
 
 					

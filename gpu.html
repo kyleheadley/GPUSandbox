@@ -1,0 +1,316 @@
+<html>
+	<head>
+		<title>Globe of Life</title>
+		<meta charset="utf-8">
+		<style>
+			body { margin: 0; }
+			canvas { width: 100%; height: 100% }
+		</style>
+	</head>
+	<body>
+		<script src="three.min.js"></script>
+		<script src="TrackballControls.js"></script>
+
+		<!-- consts -->
+		<script>
+			var WIDTH = 2048;
+			var OMINOES = 100000;
+		</script>
+
+		<!-- pass through vertex shader -->
+		<script id="ptVertexShader" type="x-shader/x-vertex">
+			void main()	{
+				gl_Position = vec4( position, 1.0 );
+			}
+		</script>
+
+		<!-- pass through fragment shader -->
+		<script id="ptFragmentShader" type="x-shader/x-fragment">
+			uniform vec2 resolution;
+			uniform sampler2D texture;
+
+			void main()	{
+				vec2 uv = vec2((gl_FragCoord.x) / resolution.x,gl_FragCoord.y / resolution.y);
+				vec4 color = texture2D( texture, uv );
+				gl_FragColor = vec4( color );
+			}
+		</script>
+
+		<!-- game of life shader -->
+		<script id="golShader" type="x-shader/x-fragment">
+
+			uniform vec2 resolution;
+			uniform sampler2D texture;
+
+			void main()	{
+				vec2 tl = vec2(gl_FragCoord.x - 1.0, gl_FragCoord.y - 1.0) / resolution.xy;
+				vec2 tm = vec2(gl_FragCoord.x + 0.0, gl_FragCoord.y - 1.0) / resolution.xy;
+				vec2 tr = vec2(gl_FragCoord.x + 1.0, gl_FragCoord.y - 1.0) / resolution.xy;
+				vec2 cl = vec2(gl_FragCoord.x - 1.0, gl_FragCoord.y + 0.0) / resolution.xy;
+				vec2 cm = vec2(gl_FragCoord.x + 0.0, gl_FragCoord.y + 0.0) / resolution.xy;
+				vec2 cr = vec2(gl_FragCoord.x + 1.0, gl_FragCoord.y + 0.0) / resolution.xy;
+				vec2 bl = vec2(gl_FragCoord.x - 1.0, gl_FragCoord.y + 1.0) / resolution.xy;
+				vec2 bm = vec2(gl_FragCoord.x + 0.0, gl_FragCoord.y + 1.0) / resolution.xy;
+				vec2 br = vec2(gl_FragCoord.x + 1.0, gl_FragCoord.y + 1.0) / resolution.xy;
+				
+				vec4 sum = texture2D( texture, tl ) +
+						   texture2D( texture, tm ) +
+						   texture2D( texture, tr ) +
+						   texture2D( texture, cl ) +
+						   texture2D( texture, cr ) +
+						   texture2D( texture, bl ) +
+						   texture2D( texture, bm ) +
+						   texture2D( texture, br );
+				vec4 home = texture2D( texture, cm );
+
+				float ox = 1.0;
+				float oy = 1.0;
+				float oz = 1.0;
+				float ow = 1.0;
+
+				if(home.x > 0.5){
+					if(sum.x > 3.5){
+						ox = 0.0;
+					} else if(sum.x < 1.5){
+						ox = 0.0;
+					}
+				} else {
+					if(sum.x > 3.5){
+						ox = 0.0;
+					} else if(sum.x < 2.5){
+						ox = 0.0;
+					}
+				}
+
+				if(home.y > 0.5){
+					if(sum.y > 3.5){
+						oy = 0.0;
+					} else if(sum.y < 1.5){
+						oy = 0.0;
+					}
+				} else {
+					if(sum.y > 3.5){
+						oy = 0.0;
+					} else if(sum.y < 2.5){
+						oy = 0.0;
+					}
+				}
+
+				// wave equations; starting values are different (see below)
+				ow = home.w + (sum.z * 0.125 - home.z) * 3.;
+				oz = home.z + ow * 0.3;
+				
+
+				// if(home.z > 0.5){
+				// 	if(sum.z > 3.5){
+				// 		oz = 0.0;
+				// 	} else if(sum.z < 1.5){
+				// 		oz = 0.0;
+				// 	}
+				// } else {
+				// 	if(sum.z > 3.5){
+				// 		oz = 0.0;
+				// 	} else if(sum.z < 2.5){
+				// 		oz = 0.0;
+				// 	}
+				// }
+
+				// if(home.w > 0.5){
+				// 	if(sum.w > 3.5){
+				// 		ow = 0.0;
+				// 	} else if(sum.w < 1.5){
+				// 		ow = 0.0;
+				// 	}
+				// } else {
+				// 	if(sum.w > 3.5){
+				// 		ow = 0.0;
+				// 	} else if(sum.w < 2.5){
+				// 		ow = 0.0;
+				// 	}
+				// }
+
+				gl_FragColor = vec4( ox,oy,oz,ow );
+			}
+
+		</script>
+
+
+		<!-- util -->
+		<script>
+			function getRandomInt(min, max) {
+    			return Math.floor(Math.random() * (max - min + 1)) + min;
+			}
+			function getRenderTarget() {
+				var renderTarget = new THREE.WebGLRenderTarget(WIDTH, WIDTH, {
+					wrapS: THREE.RepeatWrapping,
+					wrapT: THREE.RepeatWrapping,
+					minFilter: THREE.NearestFilter,
+					magFilter: THREE.NearestFilter,
+					format: THREE.RGBAFormat,
+					type: THREE.FloatType,
+					stencilBuffer: false
+				});
+
+				return renderTarget;
+			}
+		</script>
+
+		<!-- main -->
+		<script>
+			var scene = new THREE.Scene();
+			var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+
+			var renderer = new THREE.WebGLRenderer();
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			document.body.appendChild( renderer.domElement );
+			camera.position.z = 8;
+			var controls = new THREE.TrackballControls(camera, renderer.domElement)
+
+			var bgGeo = new THREE.PlaneBufferGeometry(2000,2000);
+			var bgMat = new THREE.MeshBasicMaterial({color: 0x000044})
+			var bgMesh = new THREE.Mesh(bgGeo, bgMat);
+			scene.add(bgMesh);
+			bgMesh.position.z -= 10;
+			var sphereGeo = new THREE.SphereGeometry(6,50,50);
+			var redMat = new THREE.MeshBasicMaterial({color: 0xff0000})
+			var sphereMesh = new THREE.Mesh(sphereGeo, redMat);
+			scene.add(sphereMesh);
+
+
+
+
+			var texCam = new THREE.Camera();
+			texCam.position.z = 1;
+			var passThruShader = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					texture: { type: "t", value: null },
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'ptFragmentShader' ).textContent
+			} );
+			var golShader = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					texture: { type: "t", value: null },
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'golShader' ).textContent
+			} );
+			var texScene = new THREE.Scene();
+			var texMesh = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2 ), passThruShader );
+			texScene.add(texMesh);
+			var tex1 = getRenderTarget();
+			var tex2 = getRenderTarget();
+			// Takes a texture, and render out as another texture
+			var renderTexture = function ( input, output ) {
+				texMesh.material = passThruShader;
+				passThruShader.uniforms.texture.value = input;
+				renderer.render( texScene, texCam, output );
+			}
+			var renderTick = function(input, output) {
+				texMesh.material = golShader;
+				golShader.uniforms.texture.value = input;
+				renderer.render( texScene, texCam, output );
+			}
+			var flipflop = true;
+			var flip = function() {
+				if (flipflop) {
+					renderTick( tex1, tex2 );
+					sphereMesh.material.map = tex2;
+				} else {
+					renderTick( tex2, tex1 );
+					sphereMesh.material.map = tex1;
+				}
+				flipflop = !flipflop;
+			}
+			var a = new Float32Array( WIDTH * WIDTH * 4 );
+			for(var i = 0; i < WIDTH * WIDTH * 4; i+=4) a[i+2] = 0.7;
+			//f-omino
+			var f = [[0,1,1],[1,1,0],[0,1,0]];
+			for(var starters = 0; starters<OMINOES; starters++){
+				var px = getRandomInt(0,WIDTH);
+				var py = getRandomInt(0,WIDTH);
+				var col = getRandomInt(0,3);
+				var num = 1.0;
+				for(var i = 0; i<f.length;i++){
+					for(var j = 0; j<f[i].length;j++){
+						if(f[i][j]){
+							var index = (i+py)*WIDTH*4+(j+px)*4
+							if(col == 2){
+								//for waves, we want equal velocities and don't care about positions
+								a[index+3] = -num;
+							}else{
+								a[index+col] = num;
+							}
+						}
+					}
+				}
+			}
+
+			var texture = new THREE.DataTexture( a, WIDTH, WIDTH, THREE.RGBAFormat, THREE.FloatType );
+			texture.minFilter = THREE.NearestFilter;
+			texture.magFilter = THREE.NearestFilter;
+			texture.needsUpdate = true;
+			texture.flipY = false;
+			renderTexture(texture, tex1);
+
+
+
+
+			sphereMesh.material = new THREE.MeshBasicMaterial({map: tex1});
+
+
+			window.addEventListener( 'resize', onWindowResize, false );
+			//window.addEventListener( 'mousedown', flip, false );
+			document.addEventListener("keydown", onKeyDown, false);
+			document.addEventListener("keyup",   onKeyUp,   false);
+
+			repeat = true;
+			function onKeyDown(){
+				repeat = !repeat;
+			}
+			function onKeyUp(){
+				//repeat = true;
+			}
+
+			function onWindowResize() {
+
+				windowHalfX = window.innerWidth / 2;
+				windowHalfY = window.innerHeight / 2;
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			var framecount = 0;
+			var oldtime = new Date().getTime();
+
+			var render = function () {
+				requestAnimationFrame( render );
+				if(repeat) flip();
+				renderer.render(scene, camera);
+
+				controls.update();
+
+
+					
+				framecount++;
+				var newtime = new Date().getTime();
+				if(newtime-oldtime>1000){
+					oldtime = newtime;
+					console.log(framecount);
+					framecount = 0;
+				}
+
+			};
+			render();
+
+
+
+		</script>
+	</body>
+</html>

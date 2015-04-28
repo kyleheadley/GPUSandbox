@@ -41,6 +41,7 @@
 
 			uniform vec2 resolution;
 			uniform sampler2D texture;
+			uniform vec3 interact;
 
 			void main()	{
 				vec2 tl = vec2(gl_FragCoord.x - 1.0, gl_FragCoord.y - 1.0) / resolution.xy;
@@ -100,34 +101,12 @@
 				ow = home.w + (sum.z * 0.125 - home.z) * 3.;
 				oz = home.z + ow * 0.3;
 				
-
-				// if(home.z > 0.5){
-				// 	if(sum.z > 3.5){
-				// 		oz = 0.0;
-				// 	} else if(sum.z < 1.5){
-				// 		oz = 0.0;
-				// 	}
-				// } else {
-				// 	if(sum.z > 3.5){
-				// 		oz = 0.0;
-				// 	} else if(sum.z < 2.5){
-				// 		oz = 0.0;
-				// 	}
-				// }
-
-				// if(home.w > 0.5){
-				// 	if(sum.w > 3.5){
-				// 		ow = 0.0;
-				// 	} else if(sum.w < 1.5){
-				// 		ow = 0.0;
-				// 	}
-				// } else {
-				// 	if(sum.w > 3.5){
-				// 		ow = 0.0;
-				// 	} else if(sum.w < 2.5){
-				// 		ow = 0.0;
-				// 	}
-				// }
+				if(interact.x < gl_FragCoord.x && interact.y < gl_FragCoord.y 
+				&& interact.x + 1. > gl_FragCoord.x && interact.y + 1. > gl_FragCoord.y){
+					if(interact.z > 0.5){
+						ox = 1.0;
+					}
+				}
 
 				gl_FragColor = vec4( ox,oy,oz,ow );
 			}
@@ -148,7 +127,7 @@
 					magFilter: THREE.NearestFilter,
 					format: THREE.RGBAFormat,
 					type: THREE.FloatType,
-					stencilBuffer: false
+					stencilBuffer: false,
 				});
 
 				return renderTarget;
@@ -192,6 +171,8 @@
 				uniforms:{ 
 					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
 					texture: { type: "t", value: null },
+					interact: { type: "v3", value: new THREE.Vector3() },
+
 				},
 				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
 				fragmentShader: document.getElementById( 'golShader' ).textContent
@@ -212,6 +193,7 @@
 			var renderTick = function(input, shader, output) {
 				texMesh.material = shader;
 				shader.uniforms.texture.value = input;
+				shader.uniforms.interact.value.set(mouseX,mouseY,mousePressed);
 				renderer.render( texScene, texCam, output );
 			}
 			var renderFinal = function(input, shader) {
@@ -269,10 +251,29 @@
 
 
 			//window.addEventListener( 'resize', onWindowResize, false );
-			//window.addEventListener( 'mousedown', flip, false );
 			document.addEventListener("keydown", onKeyDown, false);
 			document.addEventListener("keyup",   onKeyUp,   false);
+			document.addEventListener( 'mousemove', onMouseM, false );
+			document.addEventListener( 'mousedown', onMouseD, false );
+			document.addEventListener( 'mouseup', onMouseU, false );
+			
+			//inital status
+			mouseX = 0;
+			mouseY = 0;
+			mousePressed = 0.0;
+			windowHalfX = window.innerWidth / 2;
+			windowHalfY = window.innerHeight / 2;
 
+			function onMouseM( event ) {
+				mouseX = event.clientX;
+				mouseY = WIDTH - event.clientY;
+			}
+			function onMouseD( event ) {
+				mousePressed = 1.0;
+			}
+			function onMouseU( event ) {
+				mousePressed = 0.0;
+			}
 			repeat = true;
 			function onKeyDown(){
 				repeat = !repeat;

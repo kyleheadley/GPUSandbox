@@ -13,7 +13,7 @@
 
 		<!-- consts -->
 		<script>
-			var WIDTH = 512;
+			var WIDTH = 256;
 			var OMINOES = 1000;
 		</script>
 
@@ -36,6 +36,18 @@
 			}
 		</script>
 
+		<!-- pass through fragment shader with rotation -->
+		<script id="ptrFragmentShader" type="x-shader/x-fragment">
+			uniform vec2 resolution;
+			uniform sampler2D texture;
+
+			void main()	{
+				vec2 uv = vec2((gl_FragCoord.x) / resolution.x,gl_FragCoord.y / resolution.y);
+				vec4 color = texture2D( texture, uv );
+				gl_FragColor = vec4( color.argb );
+			}
+		</script>
+
 		<!-- sand shader -->
 		<script id="sandShader" type="x-shader/x-fragment">
 
@@ -43,10 +55,10 @@
 			uniform vec2 resolution;
 
 			//previous values
-			//x - mass/type
-			//y - amount
-			//z - speed
-			//w - direction
+			//x - x-speed
+			//y - y-speed
+			//z - mass/type
+			//w - amount
 			uniform sampler2D old;
 
 			//previous environment
@@ -90,44 +102,67 @@
 				vec4 wlb = texture2D( world, vec2(l, b));
 				vec4 wmb = texture2D( world, vec2(m, b));
 				vec4 wrb = texture2D( world, vec2(r, b));
-				float elt = wlt.y - lt.y;
-				float emt = wmt.y - mt.y;
-				float ert = wrt.y - rt.y;
-				float elc = wlc.y - lc.y;
-				float emc = wmc.y - mc.y;
-				float erc = wrc.y - rc.y;
-				float elb = wlb.y - lb.y;
-				float emb = wmb.y - mb.y;
-				float erb = wrb.y - rb.y;
 
-				//------------------//
-				//--simple falling--//
-				//------------------//
+				float income;
+				float loss;
 
-				//on something
-				if(wmb.y > 0.0 && mc.y > 0.0) {
-					amount += mc.y;
-					//move to side
-					// float h = mc.y * 0.501;
-					// if(wrb.y <= 0.0) {
-					// 	amount -= h;
-					// }
-					// if(wlb.y <= 0.0) {
-					// 	amount -= h;
-					// }
+				amount = mc.a;
+
+				income = clamp((lt.a - 1.0)*0.125,0.0,1.0);
+				if(lt.x > 0.0 && lt.y < 0.0){
+					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, lt.a);
 				}
-				//fall
-				if(mt.y > 0.0 && wmc.y <= 0.0) {
-					amount += mt.y;
+				amount += income;
+				income = clamp((mt.a - 1.0)*0.125,0.0,1.0);
+				if(mt.x == 0.0 && mt.y < 0.0){
+					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, mt.a);
 				}
-				//move from side
-				// if(wmc.y <= 0.0 && wrc.y > 0.0 && rt.y > 0.0) {
-				// 	amount += rt.y * 0.5;
-				// }
-				// if(wmc.y <= 0.0 && wlc.y > 0.0 && lt.y > 0.0) {
-				// 	amount += lt.y * 0.5;
-				// }
+				amount += income;
+				income = clamp((rt.a - 1.0)*0.125,0.0,1.0);
+				if(rt.x < 0.0 && rt.y < 0.0){
+					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, rt.a);
+				}
+				amount += income;
+				income = clamp((lc.a - 1.0)*0.125,0.0,1.0);
+				if(lc.x > 0.0 && lc.y == 0.0){
+					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, lc.a);
+				}
+				amount += income;
+				income = clamp((rc.a - 1.0)*0.125,0.0,1.0);
+				if(rc.x < 0.0 && rc.y == 0.0){
+					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, rc.a);
+				}
+				amount += income;
+				income = clamp((lb.a - 1.0)*0.125,0.0,1.0);
+				if(lb.x > 0.0 && lb.y > 0.0){
+					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, lb.a);
+				}
+				amount += income;
+				income = clamp((mb.a - 1.0)*0.125,0.0,1.0);
+				if(mb.x == 0.0 && mb.y > 0.0){
+					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, mb.a);
+				}
+				amount += income;
+				income = clamp((rb.a - 1.0)*0.125,0.0,1.0);
+				if(rb.x < 0.0 && rb.y > 0.0){
+					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, rb.a);
+				}
+				amount += income;
 
+				loss = clamp((mc.a - 1.0)*0.125,0.0,1.0);
+				if(mc.x > 0.0){
+					if(mc.y > 0.0) loss += clamp(clamp(1.0 - wrt.a, 0.0, 1.0 - loss), 0.0, mc.a);
+					else if(mc.y < 0.0) loss += clamp(clamp(1.0 - wrb.a, 0.0, 1.0 - loss), 0.0, mc.a);
+					else loss += clamp(clamp(1.0 - wrc.a, 0.0, 1.0 - loss), 0.0, mc.a);
+				}else if(mc.x < 0.0){
+					if(mc.y > 0.0) loss += clamp(clamp(1.0 - wlt.a, 0.0, 1.0 - loss), 0.0, mc.a);
+					else if(mc.y < 0.0) loss += clamp(clamp(1.0 - wlb.a, 0.0, 1.0 - loss), 0.0, mc.a);
+					else loss += clamp(clamp(1.0 - wlc.a, 0.0, 1.0 - loss), 0.0, mc.a);
+				}else{
+					if(mc.y > 0.0) loss += clamp(clamp(1.0 - wmt.a, 0.0, 1.0 - loss), 0.0, mc.a);
+					else if(mc.y < 0.0) loss += clamp(clamp(1.0 - wmb.a, 0.0, 1.0 - loss), 0.0, mc.a);
+				}
+				amount -= loss + clamp((mc.a - 1.0)*0.125,0.0,1.0) * 7.0;
 
 				//add a pixel at the mouse position
 				if(
@@ -139,7 +174,7 @@
 					amount += interact.z;
 				}
 
-				gl_FragColor = vec4(type, amount, 0.0, 0.0);
+				gl_FragColor = vec4(0.0, -1.0, type, amount );
 			}
 
 		</script>
@@ -159,11 +194,11 @@
 
 				vec4 sandVal = texture2D( sand, vec2(gl_FragCoord.x, gl_FragCoord.y) / resolution.xy);
 
-				if(sandVal.y > bestAmt) {
-					bestMass = sandVal.x;
-					bestAmt = sandVal.y;
+				if(sandVal.a > bestAmt) {
+					bestMass = sandVal.z;
+					bestAmt = sandVal.a;
 				}
-				totAmt += sandVal.y;
+				totAmt += sandVal.a;
 
 				//make bounding box
 				if(
@@ -176,7 +211,7 @@
 					totAmt = 10.;
 				}
 
-				gl_FragColor = vec4(bestMass, totAmt, 0.0, 0.0);
+				gl_FragColor = vec4(0.0, 0.0, bestMass, totAmt);
 			}
 
 		</script>
@@ -191,7 +226,7 @@
 			void main()	{
 
 				vec4 data = texture2D( env, vec2(gl_FragCoord.x, gl_FragCoord.y) / resolution.xy);
-				float type = data.x;
+				float type = data.z;
 				vec3 outColor = vec3(1.,0.,0.);
 
 
@@ -200,7 +235,8 @@
 				if(type == 2.0) outColor = vec3(.3, .5, .7);
 				if(type == 100.0) outColor = vec3(1., 1., 1.);
 
-				outColor *= clamp(data.y, 0.3, 1.0);
+				//give a sence of how much is there
+				outColor *= data.a;
 
 				gl_FragColor = vec4(outColor, 1.0);
 			}
@@ -264,6 +300,14 @@
 				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
 				fragmentShader: document.getElementById( 'ptFragmentShader' ).textContent
 			} );
+			var rotShader = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					texture: { type: "t", value: null },
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'ptrFragmentShader' ).textContent
+			} );
 			var sandShader = new THREE.ShaderMaterial( {
 				uniforms:{ 
 					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
@@ -319,7 +363,7 @@
 				renderer.render( texScene, texCam );
 			}
 			var viewTex = function(input) {
-				texMesh.material = passThruShader;
+				texMesh.material = rotShader;
 				passThruShader.uniforms.texture.value = input;
 				renderer.render( texScene, texCam );
 			}
@@ -403,8 +447,11 @@
 				if(repeat) {
 					flip();
 					//fast
-					//flip();flip();
+					flip();flip();flip();
+					//flip();flip();flip();flip();
+
 					//viewTex(flipflop ? sandTex0 : sandTex1);
+					//viewTex(envTex);
 					renderFinal();
 
 					//console frames per second

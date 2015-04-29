@@ -36,83 +36,176 @@
 			}
 		</script>
 
-		<!-- game of life shader -->
-		<script id="golShader" type="x-shader/x-fragment">
+		<!-- sand shader -->
+		<script id="sandShader" type="x-shader/x-fragment">
 
+			//width of textures
 			uniform vec2 resolution;
-			uniform sampler2D texture;
+
+			//previous values
+			//x - mass/type
+			//y - amount
+			//z - speed
+			//w - direction
+			uniform sampler2D old;
+
+			//previous environment
+			uniform sampler2D world;
+
+			//user position, request
 			uniform vec3 interact;
 
+			const float PI = 3.141592653589793;
+
+			//code for this material type
+			const float sandMass = 1.0;
+
 			void main()	{
-				vec2 tl = vec2(gl_FragCoord.x - 1.0, gl_FragCoord.y - 1.0) / resolution.xy;
-				vec2 tm = vec2(gl_FragCoord.x + 0.0, gl_FragCoord.y - 1.0) / resolution.xy;
-				vec2 tr = vec2(gl_FragCoord.x + 1.0, gl_FragCoord.y - 1.0) / resolution.xy;
-				vec2 cl = vec2(gl_FragCoord.x - 1.0, gl_FragCoord.y + 0.0) / resolution.xy;
-				vec2 cm = vec2(gl_FragCoord.x + 0.0, gl_FragCoord.y + 0.0) / resolution.xy;
-				vec2 cr = vec2(gl_FragCoord.x + 1.0, gl_FragCoord.y + 0.0) / resolution.xy;
-				vec2 bl = vec2(gl_FragCoord.x - 1.0, gl_FragCoord.y + 1.0) / resolution.xy;
-				vec2 bm = vec2(gl_FragCoord.x + 0.0, gl_FragCoord.y + 1.0) / resolution.xy;
-				vec2 br = vec2(gl_FragCoord.x + 1.0, gl_FragCoord.y + 1.0) / resolution.xy;
-				
-				vec4 sum = texture2D( texture, tl ) +
-						   texture2D( texture, tm ) +
-						   texture2D( texture, tr ) +
-						   texture2D( texture, cl ) +
-						   texture2D( texture, cr ) +
-						   texture2D( texture, bl ) +
-						   texture2D( texture, bm ) +
-						   texture2D( texture, br );
-				vec4 home = texture2D( texture, cm );
 
-				float ox = 1.0;
-				float oy = 1.0;
-				float oz = 1.0;
-				float ow = 1.0;
+				float amount = 0.0;
+				float type = sandMass;
 
-				if(home.x > 0.5){
-					if(sum.x > 3.5){
-						ox = 0.0;
-					} else if(sum.x < 1.5){
-						ox = 0.0;
-					}
-				} else {
-					if(sum.x > 3.5){
-						ox = 0.0;
-					} else if(sum.x < 2.5){
-						ox = 0.0;
-					}
+				//calculate 3x3 nearby positions and values
+				float l = (gl_FragCoord.x - 1.0) / resolution.x;
+				float m = (gl_FragCoord.x) / resolution.x;
+				float r = (gl_FragCoord.x + 1.0) / resolution.x;
+				float b = (gl_FragCoord.y - 1.0) / resolution.y;
+				float c = (gl_FragCoord.y) / resolution.y;
+				float t = (gl_FragCoord.y + 1.0) / resolution.y;
+				vec4 lt = texture2D( old, vec2(l, t));
+				vec4 mt = texture2D( old, vec2(m, t));
+				vec4 rt = texture2D( old, vec2(r, t));
+				vec4 lc = texture2D( old, vec2(l, c));
+				vec4 mc = texture2D( old, vec2(m, c));
+				vec4 rc = texture2D( old, vec2(r, c));
+				vec4 lb = texture2D( old, vec2(l, b));
+				vec4 mb = texture2D( old, vec2(m, b));
+				vec4 rb = texture2D( old, vec2(r, b));
+				vec4 wlt = texture2D( world, vec2(l, t));
+				vec4 wmt = texture2D( world, vec2(m, t));
+				vec4 wrt = texture2D( world, vec2(r, t));
+				vec4 wlc = texture2D( world, vec2(l, c));
+				vec4 wmc = texture2D( world, vec2(m, c));
+				vec4 wrc = texture2D( world, vec2(r, c));
+				vec4 wlb = texture2D( world, vec2(l, b));
+				vec4 wmb = texture2D( world, vec2(m, b));
+				vec4 wrb = texture2D( world, vec2(r, b));
+				float elt = wlt.y - lt.y;
+				float emt = wmt.y - mt.y;
+				float ert = wrt.y - rt.y;
+				float elc = wlc.y - lc.y;
+				float emc = wmc.y - mc.y;
+				float erc = wrc.y - rc.y;
+				float elb = wlb.y - lb.y;
+				float emb = wmb.y - mb.y;
+				float erb = wrb.y - rb.y;
+
+				//------------------//
+				//--simple falling--//
+				//------------------//
+
+				//on something
+				if(wmb.y > 0.0 && mc.y > 0.0) {
+					amount += mc.y;
+					//move to side
+					// float h = mc.y * 0.501;
+					// if(wrb.y <= 0.0) {
+					// 	amount -= h;
+					// }
+					// if(wlb.y <= 0.0) {
+					// 	amount -= h;
+					// }
+				}
+				//fall
+				if(mt.y > 0.0 && wmc.y <= 0.0) {
+					amount += mt.y;
+				}
+				//move from side
+				// if(wmc.y <= 0.0 && wrc.y > 0.0 && rt.y > 0.0) {
+				// 	amount += rt.y * 0.5;
+				// }
+				// if(wmc.y <= 0.0 && wlc.y > 0.0 && lt.y > 0.0) {
+				// 	amount += lt.y * 0.5;
+				// }
+
+
+				//add a pixel at the mouse position
+				if(
+					interact.x < gl_FragCoord.x &&
+					interact.y < gl_FragCoord.y &&
+					interact.x + 1. > gl_FragCoord.x &&
+					interact.y + 1. > gl_FragCoord.y
+				){
+					amount += interact.z;
 				}
 
-				if(home.y > 0.5){
-					if(sum.y > 3.5){
-						oy = 0.0;
-					} else if(sum.y < 1.5){
-						oy = 0.0;
-					}
-				} else {
-					if(sum.y > 3.5){
-						oy = 0.0;
-					} else if(sum.y < 2.5){
-						oy = 0.0;
-					}
-				}
-
-				// wave equations; starting values are different (see below)
-				ow = home.w + (sum.z * 0.125 - home.z) * 3.;
-				oz = home.z + ow * 0.3;
-				
-				if(interact.x < gl_FragCoord.x && interact.y < gl_FragCoord.y 
-				&& interact.x + 1. > gl_FragCoord.x && interact.y + 1. > gl_FragCoord.y){
-					if(interact.z > 0.5){
-						ox = 1.0;
-					}
-				}
-
-				gl_FragColor = vec4( ox,oy,oz,ow );
+				gl_FragColor = vec4(type, amount, 0.0, 0.0);
 			}
 
 		</script>
 
+		<!-- environment shader -->
+		<script id="envShader" type="x-shader/x-fragment">
+
+			//width of textures
+			uniform vec2 resolution;
+			uniform sampler2D sand;
+
+			void main()	{
+
+				float bestMass = 0.;
+				float bestAmt = 0.;
+				float totAmt = 0.;
+
+				vec4 sandVal = texture2D( sand, vec2(gl_FragCoord.x, gl_FragCoord.y) / resolution.xy);
+
+				if(sandVal.y > bestAmt) {
+					bestMass = sandVal.x;
+					bestAmt = sandVal.y;
+				}
+				totAmt += sandVal.y;
+
+				//make bounding box
+				if(
+					gl_FragCoord.x < 1. ||
+					gl_FragCoord.x > resolution.x - 1. ||
+					gl_FragCoord.y < 1. ||
+					gl_FragCoord.y > resolution.y - 1.
+				){
+					bestMass = 100.;
+					totAmt = 10.;
+				}
+
+				gl_FragColor = vec4(bestMass, totAmt, 0.0, 0.0);
+			}
+
+		</script>
+
+		<!-- output shader -->
+		<script id="outShader" type="x-shader/x-fragment">
+
+			//width of textures
+			uniform vec2 resolution;
+			uniform sampler2D env;
+
+			void main()	{
+
+				vec4 data = texture2D( env, vec2(gl_FragCoord.x, gl_FragCoord.y) / resolution.xy);
+				float type = data.x;
+				vec3 outColor = vec3(1.,0.,0.);
+
+
+				if(type == 0.0) outColor = vec3(0., 0., 0.);
+				if(type == 1.0) outColor = vec3(.7, .5, .3);
+				if(type == 2.0) outColor = vec3(.3, .5, .7);
+				if(type == 100.0) outColor = vec3(1., 1., 1.);
+
+				outColor *= clamp(data.y, 0.3, 1.0);
+
+				gl_FragColor = vec4(outColor, 1.0);
+			}
+
+		</script>
 
 		<!-- util -->
 		<script>
@@ -159,6 +252,10 @@
 
 			var texCam = new THREE.Camera();
 			texCam.position.z = 1;
+			var sandTex0 = getRenderTarget();
+			var sandTex1 = getRenderTarget();
+			var envTex = getRenderTarget();
+
 			var passThruShader = new THREE.ShaderMaterial( {
 				uniforms:{ 
 					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
@@ -167,22 +264,38 @@
 				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
 				fragmentShader: document.getElementById( 'ptFragmentShader' ).textContent
 			} );
-			var golShader = new THREE.ShaderMaterial( {
+			var sandShader = new THREE.ShaderMaterial( {
 				uniforms:{ 
 					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
-					texture: { type: "t", value: null },
+					old: { type: "t", value: null },
+					world: { type: "t", value: envTex },
 					interact: { type: "v3", value: new THREE.Vector3() },
 
 				},
 				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
-				fragmentShader: document.getElementById( 'golShader' ).textContent
+				fragmentShader: document.getElementById( 'sandShader' ).textContent
+			} );
+			var envShader = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					sand: { type: "t", value: null },
+
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'envShader' ).textContent
+			} );
+			var outShader = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					env: { type: "t", value: envTex },
+
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'outShader' ).textContent
 			} );
 			var texScene = new THREE.Scene();
 			var texMesh = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2 ), passThruShader );
 			texScene.add(texMesh);
-
-			var tex1 = getRenderTarget();
-			var tex2 = getRenderTarget();
 
 			// Takes a texture, and render out as another texture
 			var renderTexture = function ( input, output ) {
@@ -192,57 +305,45 @@
 			}
 			var renderTick = function(input, shader, output) {
 				texMesh.material = shader;
-				shader.uniforms.texture.value = input;
-				shader.uniforms.interact.value.set(mouseX,mouseY,mousePressed);
+				shader.uniforms.old.value = input;
+				shader.uniforms.interact.value.set(mouseX,mouseY,mouseValue);
 				renderer.render( texScene, texCam, output );
 			}
-			var renderFinal = function(input, shader) {
-				texMesh.material = shader;
-				shader.uniforms.texture.value = input;
+			var renderEnv = function(use0) {
+				texMesh.material = envShader;
+				envShader.uniforms.sand.value = use0 ? sandTex0 : sandTex1;
+				renderer.render( texScene, texCam, envTex );
+			}
+			var renderFinal = function() {
+				texMesh.material = outShader;
 				renderer.render( texScene, texCam );
 			}
-			var flipflop = true;
+			var viewTex = function(input) {
+				texMesh.material = passThruShader;
+				passThruShader.uniforms.texture.value = input;
+				renderer.render( texScene, texCam );
+			}
+			var flipflop = false;
 			var flip = function() {
 				if (flipflop) {
-					renderTick( tex1, golShader, tex2 );
-					//sphereMesh.material.map = tex2;
+					renderTick( sandTex1, sandShader, sandTex0 );
+					renderEnv(flipflop);
 				} else {
-					renderTick( tex2, golShader, tex1 );
-					//sphereMesh.material.map = tex1;
+					renderTick( sandTex0, sandShader, sandTex1 );
+					renderEnv(flipflop);
 				}
 				flipflop = !flipflop;
 			}
+
 			//initialize data
 			var a = new Float32Array( WIDTH * WIDTH * 4 );
-			for(var i = 0; i < WIDTH * WIDTH * 4; i+=4) a[i+2] = 0.7;
-			//f-omino
-			var f = [[0,1,1],[1,1,0],[0,1,0]];
-			for(var starters = 0; starters<OMINOES; starters++){
-				var px = getRandomInt(0,WIDTH);
-				var py = getRandomInt(0,WIDTH);
-				var col = getRandomInt(0,3);
-				var num = 1.0;
-				for(var i = 0; i<f.length;i++){
-					for(var j = 0; j<f[i].length;j++){
-						if(f[i][j]){
-							var index = (i+py)*WIDTH*4+(j+px)*4
-							if(col == 2){
-								//for waves, we want equal velocities and don't care about positions
-								a[index+3] = -num;
-							}else{
-								a[index+col] = num;
-							}
-						}
-					}
-				}
-			}
 
 			var texture = new THREE.DataTexture( a, WIDTH, WIDTH, THREE.RGBAFormat, THREE.FloatType );
 			texture.minFilter = THREE.NearestFilter;
 			texture.magFilter = THREE.NearestFilter;
 			texture.needsUpdate = true;
 			texture.flipY = false;
-			renderTexture(texture, tex1);
+			renderTexture(texture, sandTex0);
 
 
 
@@ -260,7 +361,7 @@
 			//inital status
 			mouseX = 0;
 			mouseY = 0;
-			mousePressed = 0.0;
+			mouseValue = 0.0;
 			windowHalfX = window.innerWidth / 2;
 			windowHalfY = window.innerHeight / 2;
 
@@ -269,10 +370,10 @@
 				mouseY = WIDTH - event.clientY;
 			}
 			function onMouseD( event ) {
-				mousePressed = 1.0;
+				mouseValue = 1.0;
 			}
 			function onMouseU( event ) {
-				mousePressed = 0.0;
+				mouseValue = 0.0;
 			}
 			repeat = true;
 			function onKeyDown(){
@@ -299,24 +400,23 @@
 
 			var render = function () {
 				requestAnimationFrame( render );
-				if(repeat) flip();
-				//renderer.render(scene, camera);
-				if (flipflop) {
-					renderFinal(tex2, passThruShader);
-				} else {
-					renderFinal(tex1, passThruShader);
+				if(repeat) {
+					flip();
+					//fast
+					//flip();flip();
+					//viewTex(flipflop ? sandTex0 : sandTex1);
+					renderFinal();
+
+					//console frames per second
+					framecount++;
+					var newtime = new Date().getTime();
+					if(newtime-oldtime>1000){
+						oldtime = newtime;
+						console.log(framecount);
+						framecount = 0;
+					}
+
 				}
-
-
-					
-				framecount++;
-				var newtime = new Date().getTime();
-				if(newtime-oldtime>1000){
-					oldtime = newtime;
-					console.log(framecount);
-					framecount = 0;
-				}
-
 			};
 			render();
 

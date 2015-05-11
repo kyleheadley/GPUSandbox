@@ -13,7 +13,7 @@
 
 		<!-- consts -->
 		<script>
-			var WIDTH = 256;
+			var WIDTH = 512;
 			var OMINOES = 1000;
 		</script>
 
@@ -67,7 +67,10 @@
 			//user position, request
 			uniform vec3 interact;
 
-			const float PI = 3.141592653589793;
+			//fluidity - 0.0 to 0.33
+			const float flow = 0.1;
+			//non-flow 0.0 to 1.0
+			const float sticky = 0.0;
 
 			//code for this material type
 			const float sandMass = 1.0;
@@ -84,18 +87,18 @@
 				float b = (gl_FragCoord.y - 1.0) / resolution.y;
 				float c = (gl_FragCoord.y) / resolution.y;
 				float t = (gl_FragCoord.y + 1.0) / resolution.y;
-				vec4 lt = texture2D( old, vec2(l, t));
+				//vec4 lt = texture2D( old, vec2(l, t));
 				vec4 mt = texture2D( old, vec2(m, t));
-				vec4 rt = texture2D( old, vec2(r, t));
+				//vec4 rt = texture2D( old, vec2(r, t));
 				vec4 lc = texture2D( old, vec2(l, c));
 				vec4 mc = texture2D( old, vec2(m, c));
 				vec4 rc = texture2D( old, vec2(r, c));
-				vec4 lb = texture2D( old, vec2(l, b));
-				vec4 mb = texture2D( old, vec2(m, b));
-				vec4 rb = texture2D( old, vec2(r, b));
-				vec4 wlt = texture2D( world, vec2(l, t));
-				vec4 wmt = texture2D( world, vec2(m, t));
-				vec4 wrt = texture2D( world, vec2(r, t));
+				//vec4 lb = texture2D( old, vec2(l, b));
+				//vec4 mb = texture2D( old, vec2(m, b));
+				//vec4 rb = texture2D( old, vec2(r, b));
+				//vec4 wlt = texture2D( world, vec2(l, t));
+				//vec4 wmt = texture2D( world, vec2(m, t));
+				//vec4 wrt = texture2D( world, vec2(r, t));
 				vec4 wlc = texture2D( world, vec2(l, c));
 				vec4 wmc = texture2D( world, vec2(m, c));
 				vec4 wrc = texture2D( world, vec2(r, c));
@@ -103,66 +106,30 @@
 				vec4 wmb = texture2D( world, vec2(m, b));
 				vec4 wrb = texture2D( world, vec2(r, b));
 
-				float income;
-				float loss;
+				float extra;
 
 				amount = mc.a;
 
-				income = clamp((lt.a - 1.0)*0.125,0.0,1.0);
-				if(lt.x > 0.0 && lt.y < 0.0){
-					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, lt.a);
-				}
-				amount += income;
-				income = clamp((mt.a - 1.0)*0.125,0.0,1.0);
-				if(mt.x == 0.0 && mt.y < 0.0){
-					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, mt.a);
-				}
-				amount += income;
-				income = clamp((rt.a - 1.0)*0.125,0.0,1.0);
-				if(rt.x < 0.0 && rt.y < 0.0){
-					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, rt.a);
-				}
-				amount += income;
-				income = clamp((lc.a - 1.0)*0.125,0.0,1.0);
-				if(lc.x > 0.0 && lc.y == 0.0){
-					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, lc.a);
-				}
-				amount += income;
-				income = clamp((rc.a - 1.0)*0.125,0.0,1.0);
-				if(rc.x < 0.0 && rc.y == 0.0){
-					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, rc.a);
-				}
-				amount += income;
-				income = clamp((lb.a - 1.0)*0.125,0.0,1.0);
-				if(lb.x > 0.0 && lb.y > 0.0){
-					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, lb.a);
-				}
-				amount += income;
-				income = clamp((mb.a - 1.0)*0.125,0.0,1.0);
-				if(mb.x == 0.0 && mb.y > 0.0){
-					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, mb.a);
-				}
-				amount += income;
-				income = clamp((rb.a - 1.0)*0.125,0.0,1.0);
-				if(rb.x < 0.0 && rb.y > 0.0){
-					income += clamp(clamp(1.0 - wmc.a, 0.0, 1.0 - income ), 0.0, rb.a);
-				}
-				amount += income;
+				//fall
+				amount += clamp(1.0 - wmc.a, 0.0, mt.a);
+				amount -= clamp(1.0 - wmb.a, 0.0, mc.a);
 
-				loss = clamp((mc.a - 1.0)*0.125,0.0,1.0);
-				if(mc.x > 0.0){
-					if(mc.y > 0.0) loss += clamp(clamp(1.0 - wrt.a, 0.0, 1.0 - loss), 0.0, mc.a);
-					else if(mc.y < 0.0) loss += clamp(clamp(1.0 - wrb.a, 0.0, 1.0 - loss), 0.0, mc.a);
-					else loss += clamp(clamp(1.0 - wrc.a, 0.0, 1.0 - loss), 0.0, mc.a);
-				}else if(mc.x < 0.0){
-					if(mc.y > 0.0) loss += clamp(clamp(1.0 - wlt.a, 0.0, 1.0 - loss), 0.0, mc.a);
-					else if(mc.y < 0.0) loss += clamp(clamp(1.0 - wlb.a, 0.0, 1.0 - loss), 0.0, mc.a);
-					else loss += clamp(clamp(1.0 - wlc.a, 0.0, 1.0 - loss), 0.0, mc.a);
-				}else{
-					if(mc.y > 0.0) loss += clamp(clamp(1.0 - wmt.a, 0.0, 1.0 - loss), 0.0, mc.a);
-					else if(mc.y < 0.0) loss += clamp(clamp(1.0 - wmb.a, 0.0, 1.0 - loss), 0.0, mc.a);
+				//spread
+				extra = clamp(wlb.a - 1.0 + lc.a, 0.0, lc.a);
+				if(extra - wmc.a > sticky){
+					amount += clamp(1.0 - wmc.a, 0.0, extra * flow);
 				}
-				amount -= loss + clamp((mc.a - 1.0)*0.125,0.0,1.0) * 7.0;
+				extra = clamp(wrb.a - 1.0 + rc.a, 0.0, rc.a);
+				if(extra - wmc.a > sticky){
+					amount += clamp(1.0 - wmc.a, 0.0, extra * flow);
+				}
+				extra = clamp(wmb.a - 1.0 + mc.a, 0.0, mc.a);
+				if(extra - wrc.a > sticky){
+					amount -= clamp(1.0 - wrc.a, 0.0, extra * flow);
+				}
+				if(extra - wlc.a > sticky){
+					amount -= clamp(1.0 - wlc.a, 0.0, extra * flow);
+				}
 
 				//add a pixel at the mouse position
 				if(
@@ -171,10 +138,10 @@
 					interact.x + 1. > gl_FragCoord.x &&
 					interact.y + 1. > gl_FragCoord.y
 				){
-					amount += interact.z;
+					amount = clamp(amount + interact.z, 0.0, 1.0);
 				}
 
-				gl_FragColor = vec4(0.0, -1.0, type, amount );
+				gl_FragColor = vec4(0.0, 0.0, type, amount );
 			}
 
 		</script>
@@ -208,7 +175,7 @@
 					gl_FragCoord.y > resolution.y - 1.
 				){
 					bestMass = 100.;
-					totAmt = 10.;
+					totAmt = 1.;
 				}
 
 				gl_FragColor = vec4(0.0, 0.0, bestMass, totAmt);
@@ -236,7 +203,7 @@
 				if(type == 100.0) outColor = vec3(1., 1., 1.);
 
 				//give a sence of how much is there
-				outColor *= data.a;
+				outColor *= data.a;// * data.a * data.a * data.a;
 
 				gl_FragColor = vec4(outColor, 1.0);
 			}

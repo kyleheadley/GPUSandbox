@@ -1,0 +1,607 @@
+<html>
+	<head>
+		<title>Dynamic Color</title>
+		<meta charset="utf-8">
+		<style>
+			body { margin: 0; }
+			canvas { width: 100%; height: 100% }
+		</style>
+	</head>
+	<body>
+		<!-- libs -->
+		<script src="three/three.min.js"></script>
+		<script src="jscolor/jscolor.js"></script>
+
+		<!-- consts -->
+		<script>
+			var WIDTH = 512;
+		</script>
+
+		<!-- pass through vertex shader -->
+		<script id="ptVertexShader" type="x-shader/x-vertex">
+			void main()	{
+				gl_Position = vec4( position, 1.0 );
+			}
+		</script>
+
+		<!-- pass through fragment shader -->
+		<script id="ptFragmentShader" type="x-shader/x-fragment">
+			uniform vec2 resolution;
+			uniform sampler2D old;
+
+			void main()	{
+				vec2 uv = gl_FragCoord.xy / resolution.xy;
+				gl_FragColor = vec4(texture2D( old, uv ));
+			}
+		</script>
+
+		<!-- show amount -->
+		<script id="amountFragmentShader" type="x-shader/x-fragment">
+			uniform vec2 resolution;
+			uniform sampler2D old;
+
+			void main()	{
+				vec2 uv = gl_FragCoord.xy / resolution.xy;
+				vec4 color = texture2D( old, uv );
+				gl_FragColor = vec4( color.a );
+			}
+		</script>
+		<script id="BWShader" type="x-shader/x-fragment">
+			uniform vec2 resolution;
+			uniform sampler2D old;
+			void main()	{
+				vec2 uv = gl_FragCoord.xy / resolution.xy;
+				vec4 color = texture2D( old, uv );
+				//our eyes see some colors more prominently
+				gl_FragColor = vec4( 0.27*color.r + 0.59*color.g + 0.14*color.b );
+			}
+		</script>
+
+		<!-- static shaders -->
+
+		<!-- rotation -->
+		<script id="Shader90" type="x-shader/x-fragment">
+			uniform vec2 resolution;
+			uniform sampler2D old;
+			void main()	{
+				vec2 uv = gl_FragCoord.xy / resolution.xy;
+				vec2 pos = vec2(uv.y, -uv.x);
+				gl_FragColor = vec4(texture2D( old, pos ));
+			}
+		</script>
+		<script id="Shader180" type="x-shader/x-fragment">
+			uniform vec2 resolution;
+			uniform sampler2D old;
+			void main()	{
+				vec2 uv = gl_FragCoord.xy / resolution.xy;
+				vec2 pos = vec2(-uv.x, -uv.y);
+				gl_FragColor = vec4(texture2D( old, pos ));
+			}
+		</script>
+		<script id="Shader270" type="x-shader/x-fragment">
+			uniform vec2 resolution;
+			uniform sampler2D old;
+			void main()	{
+				vec2 uv = gl_FragCoord.xy / resolution.xy;
+				vec2 pos = vec2(-uv.y, uv.x);
+				gl_FragColor = vec4(texture2D( old, pos ));
+			}
+		</script>
+		<!-- mirror -->
+		<script id="ShaderHz" type="x-shader/x-fragment">
+			uniform vec2 resolution;
+			uniform sampler2D old;
+			void main()	{
+				vec2 uv = gl_FragCoord.xy / resolution.xy;
+				vec2 pos = vec2(-uv.x, uv.y);
+				gl_FragColor = vec4(texture2D( old, pos ));
+			}
+		</script>
+		<script id="ShaderVt" type="x-shader/x-fragment">
+			uniform vec2 resolution;
+			uniform sampler2D old;
+			void main()	{
+				vec2 uv = gl_FragCoord.xy / resolution.xy;
+				vec2 pos = vec2(uv.x, -uv.y);
+				gl_FragColor = vec4(texture2D( old, pos ));
+			}
+		</script>
+
+		<!-- dynamic -->
+		<script id="ShaderSpread" type="x-shader/x-fragment">
+
+			//width of textures
+			uniform vec2 resolution;
+
+			//previous values
+			//r,g,b,a = red, green, blue, amount
+			uniform sampler2D old;
+
+			//user position, request
+			uniform vec4 interact;
+			//interaction color
+			uniform vec4 icolor;
+
+			void main()	{
+				//calculate 3x3 nearby positions and values
+				float l = (gl_FragCoord.x - 1.0) / resolution.x;
+				float m = (gl_FragCoord.x) / resolution.x;
+				float r = (gl_FragCoord.x + 1.0) / resolution.x;
+				float b = (gl_FragCoord.y - 1.0) / resolution.y;
+				float c = (gl_FragCoord.y) / resolution.y;
+				float t = (gl_FragCoord.y + 1.0) / resolution.y;
+				vec4 mt = texture2D( old, vec2(m, t));
+				vec4 lc = texture2D( old, vec2(l, c));
+				vec4 mc = texture2D( old, vec2(m, c));
+				vec4 rc = texture2D( old, vec2(r, c));
+				vec4 mb = texture2D( old, vec2(m, b));
+				
+				vec3 col = mc.rgb;
+				float amount;
+
+				//spread
+				amount = clamp(mc.a, 0.0, 0.5);
+				float income = (
+					max((mt.a-0.5)*0.25,0.0) + 
+					max((lc.a-0.5)*0.25,0.0) + 
+					max((rc.a-0.5)*0.25,0.0) + 
+					max((mb.a-0.5)*0.25,0.0)
+					);
+				amount += income;
+
+				//bleed (including through black)
+				if(amount < mt.a) col = mt.rgb;
+				if(amount < lc.a) col = lc.rgb;
+				if(amount < rc.a) col = rc.rgb;
+				if(amount < mb.a) col = mb.rgb;
+
+				//add some pixels at the mouse position
+				vec2 pix = vec2(interact.x - 0.5, interact.y - 0.5);
+				float sz = interact.a;
+				if(
+					icolor.a > 0.0 &&
+					pix.x + sz + 1.0 > gl_FragCoord.x &&
+					pix.y + sz + 1.0 > gl_FragCoord.y &&
+					pix.x - sz < gl_FragCoord.x &&
+					pix.y - sz < gl_FragCoord.y
+				){
+					float dist = distance(pix.xy,gl_FragCoord.xy);
+					if(dist<sz){					
+						amount += icolor.a;
+						col = icolor.rgb;
+					}
+				}
+
+				gl_FragColor = vec4(col, amount);
+			}
+
+		</script>
+		<script id="ShaderDraw" type="x-shader/x-fragment">
+			uniform vec2 resolution;
+			uniform sampler2D old;
+			uniform vec4 interact;
+			uniform vec4 icolor;
+
+			void main()	{
+				vec4 mc = texture2D( old, vec2(gl_FragCoord.xy / resolution.xy));
+				
+				vec3 col = mc.rgb;
+				float amount = mc.a;
+
+				//add some pixels at the mouse position
+				vec2 pix = vec2(interact.x - 0.5, interact.y - 0.5);
+				float sz = interact.a;
+				if(
+					icolor.a > 0.0 &&
+					pix.x + sz + 1.0 > gl_FragCoord.x &&
+					pix.y + sz + 1.0 > gl_FragCoord.y &&
+					pix.x - sz < gl_FragCoord.x &&
+					pix.y - sz < gl_FragCoord.y
+				){
+					float dist = distance(pix.xy,gl_FragCoord.xy);
+					if(dist<sz){					
+						amount = icolor.a;
+						col = icolor.rgb;
+					}
+				}
+
+				gl_FragColor = vec4(col, amount);
+			}
+
+		</script>
+		<script id="ShaderSpin" type="x-shader/x-fragment">
+
+			//width of textures
+			uniform vec2 resolution;
+
+			//previous values
+			//r,g,b,a = red, green, blue, amount
+			uniform sampler2D old;
+
+			//user position, request
+			uniform vec4 interact;
+			//interaction color
+			uniform vec4 icolor;
+
+			float ct = cos(0.15);
+			float st = sin(0.15);
+
+			void main()	{
+				//calculate spin positions
+				float m = -0.5 + (gl_FragCoord.x) / resolution.x;
+				float c = -0.5 + (gl_FragCoord.y) / resolution.y;
+				vec2 mcp = vec2(m*ct-c*st, c*ct+m*st)+vec2(.5,.5);
+				vec4 mc = texture2D( old, mcp);
+				gl_FragColor = vec4(mc);
+			}
+
+		</script>
+
+		<!-- util -->
+		<script>
+			function getRandomInt(min, max) {
+    			return Math.floor(Math.random() * (max - min + 1)) + min;
+			}
+			function getRenderTarget() {
+				var renderTarget = new THREE.WebGLRenderTarget(WIDTH, WIDTH, {
+					wrapS: THREE.RepeatWrapping,
+					wrapT: THREE.RepeatWrapping,
+					minFilter: THREE.NearestFilter,
+					magFilter: THREE.NearestFilter,
+					format: THREE.RGBAFormat,
+					type: THREE.FloatType,
+					stencilBuffer: false,
+				});
+
+				return renderTarget;
+			}
+		</script>
+
+		<!-- main -->
+		<script>
+			var renderer = new THREE.WebGLRenderer();
+			renderer.setSize( WIDTH, WIDTH);//window.innerWidth, window.innerHeight );
+			document.body.appendChild( renderer.domElement );
+
+			var texCam = new THREE.Camera();
+			texCam.position.z = 1;
+			var canvTex0 = getRenderTarget();
+			var canvTex1 = getRenderTarget();
+
+			var passThruShader = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					old: { type: "t", value: null },
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'ptFragmentShader' ).textContent
+			} );
+			var amountShader = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					old: { type: "t", value: null },
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'amountFragmentShader' ).textContent
+			} );
+			var BWShader = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					old: { type: "t", value: null },
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'BWShader' ).textContent
+			} );
+			//static
+			var Shader90 = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					old: { type: "t", value: null },
+					interact: { type: "v4", value: new THREE.Vector4() },
+					icolor: { type:"v4", value: new THREE.Vector4() },
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'Shader90' ).textContent
+			} );
+			var Shader180 = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					old: { type: "t", value: null },
+					interact: { type: "v4", value: new THREE.Vector4() },
+					icolor: { type:"v4", value: new THREE.Vector4() },
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'Shader180' ).textContent
+			} );
+			var Shader270 = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					old: { type: "t", value: null },
+					interact: { type: "v4", value: new THREE.Vector4() },
+					icolor: { type:"v4", value: new THREE.Vector4() },
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'Shader270' ).textContent
+			} );
+			var ShaderHz = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					old: { type: "t", value: null },
+					interact: { type: "v4", value: new THREE.Vector4() },
+					icolor: { type:"v4", value: new THREE.Vector4() },
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'ShaderHz' ).textContent
+			} );
+			var ShaderVt = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					old: { type: "t", value: null },
+					interact: { type: "v4", value: new THREE.Vector4() },
+					icolor: { type:"v4", value: new THREE.Vector4() },
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'ShaderVt' ).textContent
+			} );
+			//dynamic
+			var ShaderDraw = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					old: { type: "t", value: null },
+					interact: { type: "v4", value: new THREE.Vector4() },
+					icolor: { type:"v4", value: new THREE.Vector4() },
+
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'ShaderDraw' ).textContent
+			} );
+			var ShaderSpread = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					old: { type: "t", value: null },
+					interact: { type: "v4", value: new THREE.Vector4() },
+					icolor: { type:"v4", value: new THREE.Vector4() },
+
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'ShaderSpread' ).textContent
+			} );
+			var ShaderSpin = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					old: { type: "t", value: null },
+					interact: { type: "v4", value: new THREE.Vector4() },
+					icolor: { type:"v4", value: new THREE.Vector4() },
+
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'ShaderSpin' ).textContent
+			} );
+			var texScene = new THREE.Scene();
+			var texMesh = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2 ), passThruShader );
+			texScene.add(texMesh);
+			//doesn't work yet
+			// var lineScene = new THREE.Scene();
+			// var lineMat = new THREE.LineBasicMaterial();
+			// var lineGeom = new THREE.Geometry();
+			// var lineObj = new THREE.Line( lineGeom, lineMat );
+			// lineScene.add(lineObj);
+
+			//default
+			outShader = passThruShader;
+
+			// Takes a texture, and render out as another texture
+			var copyTexture = function ( input, output ) {
+				texMesh.material = passThruShader;
+				passThruShader.uniforms.old.value = input;
+				renderer.render( texScene, texCam, output );
+			}
+			//applies shader to input, writing to output and screen
+			var renderTick = function(input, shader, output) {
+				texMesh.material = shader;
+				shader.uniforms.old.value = input;
+				shader.uniforms.interact.value.set(mouseX,mouseY,mouseZ,mouseSize);
+				shader.uniforms.icolor.value.set(mouseRed,mouseGreen,mouseBlue,mouseDown?mouseAmount:0);
+				renderer.render( texScene, texCam, output );
+			}
+			//doesn't work yet
+			// var addLine = function(x1,y1,x2,y2,c){
+			// 	lineGeom.vertices = [
+			// 		new THREE.Vector3(x1,y1,0.0),
+			// 		new THREE.Vector3(x2,y2,0.0),
+			// 		];
+			// 	lineGeom.verticesNeedUpdate = true;
+			// 	lineMat.color = c;
+
+			// 	var tex = flipflop ? canvTex0 : canvTex1;
+			// 	renderer.render( lineScene, texCam, tex);
+			// }
+			var renderFinal = function(shader){
+				var tex = flipflop ? canvTex0 : canvTex1;
+				texMesh.material = shader;
+				shader.uniforms.old.value = tex;
+				renderer.render( texScene, texCam);
+			}
+			var flipflop = false;
+			var calc = function(shader) {
+				if (flipflop) {
+					renderTick( canvTex1, shader, canvTex0 );
+				} else {
+					renderTick( canvTex0, shader, canvTex1 );
+				}
+				flipflop = !flipflop;
+			}
+
+			//initialize data
+			var a = new Float32Array( WIDTH * WIDTH * 4 );
+
+			var texture = new THREE.DataTexture( a, WIDTH, WIDTH, THREE.RGBAFormat, THREE.FloatType );
+			texture.minFilter = THREE.NearestFilter;
+			texture.magFilter = THREE.NearestFilter;
+			texture.needsUpdate = true;
+			texture.flipY = false;
+			copyTexture(texture, canvTex0);
+
+
+			//window.addEventListener( 'resize', onWindowResize, false );
+			document.addEventListener("keydown", onKeyDown, false);
+			document.addEventListener("keyup",   onKeyUp,   false);
+			document.addEventListener( 'mousemove', onMouseM, false );
+			document.addEventListener( 'mousedown', onMouseD, false );
+			document.addEventListener( 'mouseup', onMouseU, false );
+			
+			//inital status
+			mouseDown = false;
+			mouseOldX = 0;
+			mouseOldY = 0;
+			mouseOldZ = 0;
+			mouseX = 0;
+			mouseY = 0;
+			mouseZ = 0;
+			mouseSize = 3.0;
+			mouseRed = 1.0;
+			mouseGreen = 1.0;
+			mouseBlue = 1.0;
+			mouseAmount = 1.0;
+
+			windowHalfX = window.innerWidth / 2;
+			windowHalfY = window.innerHeight / 2;
+
+			function onMouseM( event ) {
+				mouseOldX = mouseX;
+				mouseOldY = mouseY;
+				mouseX = event.clientX;
+				mouseY = WIDTH - event.clientY;
+
+				//not working
+				// if(mouseSize > 0.0){
+				// 	addLine(mouseOldX,mouseOldY,mouseX,mouseY,
+				// 		new THREE.Color(mouseRed,mouseGreen,mouseBlue));
+				// }
+			}
+			var randColor = true;
+			function onMouseD( event ) {
+				mouseDown = true;
+				if(randColor){
+					mouseRed = Math.random();
+					mouseGreen = Math.random();
+					mouseBlue = Math.random();
+					while(mouseRed+mouseGreen+mouseBlue < 0.6){
+						mouseRed = Math.random();
+						mouseGreen = Math.random();
+						mouseBlue = Math.random();
+					}
+				}else{
+					col = document.getElementById("color").value;
+					r = col.slice(0,2);
+					g = col.slice(2,4);
+					b = col.slice(4,6);
+					mouseRed = parseInt(r,16)/255;
+					mouseGreen = parseInt(g,16)/255;
+					mouseBlue = parseInt(b,16)/255;
+				}
+			}
+			function onMouseU( event ) {
+				mouseDown = false;
+			}
+			repeat = true;
+			function onKeyDown(){
+				repeat = !repeat;
+				if(!repeat){
+					//renderFinal(BWShader);
+				}
+			}
+			function onKeyUp(){
+				//repeat = true;
+			}
+
+			var cmdShader = passThruShader;
+			var framecount = 0;
+			var oldtime = new Date().getTime();
+
+			var cycleShaders = [ShaderSpread,ShaderSpread,ShaderSpread,ShaderSpread];
+			var cycle = function(index, shader){
+				cycleShaders[index] = shader;
+			}
+
+			var render = function () {
+				requestAnimationFrame( render );
+				if(repeat) {
+
+					//do static buttons first
+					if(cmdShader != passThruShader) {
+						calc(cmdShader);
+						cmdShader = passThruShader;
+					}
+					//then dynamic ones
+					for(var i = 0; i < cycleShaders.length; i++){
+						calc(cycleShaders[i]);
+					}
+					//then final filter
+					renderFinal(outShader);
+
+					//console frames per second
+					framecount++;
+					var newtime = new Date().getTime();
+					if(newtime-oldtime>1000){
+						oldtime = newtime;
+						console.log(framecount);
+						framecount = 0;
+					}
+
+				}
+			};
+			render();
+
+
+
+		</script>
+
+		<!-- controls -->
+		<div style='float: right'>
+			<!-- static controls -->
+			<button onclick='cmdShader=Shader90;'>90</button>
+			<button onclick='cmdShader=Shader180;'>180</button>
+			<button onclick='cmdShader=Shader270;'>270</button>
+			<button onclick='cmdShader=ShaderHz;'>horizontal</button>
+			<button onclick='cmdShader=ShaderVt;'>vertical</button>
+			<!-- dynamic controls -->
+			<table>
+				<tr><td>Stage</td><td>1</td><td>2</td><td>3</td><td>4</td></tr>
+				<tr><td>Draw</td>
+					<td><input type='radio' name='stage0' onclick='cycle(0,ShaderDraw);'/></td>
+					<td><input type='radio' name='stage1' onclick='cycle(1,ShaderDraw);'/></td>
+					<td><input type='radio' name='stage2' onclick='cycle(2,ShaderDraw);'/></td>
+					<td><input type='radio' name='stage3' onclick='cycle(3,ShaderDraw);'/></td>
+				</tr>
+				<tr><td>Spread</td>
+					<td><input checked type='radio' name='stage0' onclick='cycle(0,ShaderSpread);'/></td>
+					<td><input checked type='radio' name='stage1' onclick='cycle(1,ShaderSpread);'/></td>
+					<td><input checked type='radio' name='stage2' onclick='cycle(2,ShaderSpread);'/></td>
+					<td><input checked type='radio' name='stage3' onclick='cycle(3,ShaderSpread);'/></td>
+				</tr>
+				<tr><td>Spin</td>
+					<td><input type='radio' name='stage0' onclick='cycle(0,ShaderSpin);'/></td>
+					<td><input type='radio' name='stage1' onclick='cycle(1,ShaderSpin);'/></td>
+					<td><input type='radio' name='stage2' onclick='cycle(2,ShaderSpin);'/></td>
+					<td><input type='radio' name='stage3' onclick='cycle(3,ShaderSpin);'/></td>
+				</tr>
+			</table>
+			Filter<select onchange='eval(this.value)'>
+				<option selected value='outShader=passThruShader'>Color</option>
+				<option value='outShader=BWShader'>Black and White</option>
+				<option value='outShader=amountShader'>Amount</option>
+			</select>
+			<br>
+			Color:
+			<input type='checkbox' onclick='randColor=this.checked' checked>random</input><br>
+			<input id='color' class='color'></input><br>
+			Size:<input type='range' onchange='mouseSize=this.value'
+				max='20' min='1' defaultValue='3'>
+			</input><br>
+			Amount:<input type='range' onchange='mouseAmount=this.value'
+				max='2' min='0' step='0.1' defaultValue='1'>
+			</input><br>
+		</div>
+	</body>
+</html>

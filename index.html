@@ -14,7 +14,7 @@
 
 		<!-- consts -->
 		<script>
-			var WIDTH = 512;
+			var WIDTH = 512;//+256+128;
 		</script>
 
 		<!-- pass through vertex shader -->
@@ -236,6 +236,49 @@
 			}
 
 		</script>
+		<script id="ShaderFall" type="x-shader/x-fragment">
+			uniform vec2 resolution;
+			uniform sampler2D old;
+			uniform vec4 interact;
+			uniform vec4 icolor;
+
+			void main()	{
+				//calculate 3x3 nearby positions and values
+				float m = (gl_FragCoord.x) / resolution.x;
+				float b = (gl_FragCoord.y - 1.0) / resolution.y;
+				float c = (gl_FragCoord.y) / resolution.y;
+				float t = (gl_FragCoord.y + 1.0) / resolution.y;
+				vec4 mt = texture2D( old, vec2(m, t));
+				vec4 mc = texture2D( old, vec2(m, c));
+				vec4 mb = texture2D( old, vec2(m, b));
+				
+				vec3 col = mc.rgb;
+				float amount = mc.a;
+
+				if(mb.a >= mc.a ){
+					//strong base
+					if(mt.a >= mc.a){
+						//top heavy
+						amount += mt.a;
+						col = vec3(mt.rgb);
+					}//else pyramid
+				}else{
+					//weak base
+					if(mt.a >= mc.a){
+						//known to fall
+						amount = mt.a;
+						col = vec3(mt.rgb);
+					}else{
+						//nothing above
+						amount = 0.0;
+						col = vec3(0.0,0.0,0.0);
+					}
+				}
+
+				gl_FragColor = vec4(col, amount);
+			}
+
+		</script>
 
 		<!-- util -->
 		<script>
@@ -376,6 +419,17 @@
 				},
 				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
 				fragmentShader: document.getElementById( 'ShaderSpin' ).textContent
+			} );
+			var ShaderFall = new THREE.ShaderMaterial( {
+				uniforms:{ 
+					resolution: { type: "v2", value: new THREE.Vector2( WIDTH, WIDTH ) },
+					old: { type: "t", value: null },
+					interact: { type: "v4", value: new THREE.Vector4() },
+					icolor: { type:"v4", value: new THREE.Vector4() },
+
+				},
+				vertexShader: document.getElementById( 'ptVertexShader' ).textContent,
+				fragmentShader: document.getElementById( 'ShaderFall' ).textContent
 			} );
 			var texScene = new THREE.Scene();
 			var texMesh = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2 ), passThruShader );
@@ -586,6 +640,12 @@
 					<td><input type='radio' name='stage1' onclick='cycle(1,ShaderSpin);'/></td>
 					<td><input type='radio' name='stage2' onclick='cycle(2,ShaderSpin);'/></td>
 					<td><input type='radio' name='stage3' onclick='cycle(3,ShaderSpin);'/></td>
+				</tr>
+				<tr><td>Fall</td>
+					<td><input type='radio' name='stage0' onclick='cycle(0,ShaderFall);'/></td>
+					<td><input type='radio' name='stage1' onclick='cycle(1,ShaderFall);'/></td>
+					<td><input type='radio' name='stage2' onclick='cycle(2,ShaderFall);'/></td>
+					<td><input type='radio' name='stage3' onclick='cycle(3,ShaderFall);'/></td>
 				</tr>
 			</table>
 			Filter<select onchange='eval(this.value)'>
